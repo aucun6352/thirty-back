@@ -6,7 +6,7 @@ use entity::*;
 
 use rocket::http::Status;
 use rocket::response::status::BadRequest;
-use rocket::serde::{json::Json, Serialize};
+use rocket::serde::json::Json;
 use rocket::{
     fairing::{self, AdHoc},
     Build, Rocket,
@@ -16,7 +16,7 @@ use migration::MigratorTrait;
 use rocket_okapi::rapidoc::{make_rapidoc, GeneralConfig, HideShowConfig, RapiDocConfig};
 use rocket_okapi::settings::UrlObject;
 use rocket_okapi::swagger_ui::{make_swagger_ui, SwaggerUIConfig};
-use rocket_okapi::{openapi, openapi_get_routes, JsonSchema};
+use rocket_okapi::{openapi, openapi_get_routes};
 use sea_orm::{entity::*, QueryFilter};
 use sea_orm_rocket::{Connection, Database};
 use securestore::{KeySource, SecretsManager};
@@ -24,33 +24,26 @@ use simple_logger::SimpleLogger;
 
 mod open_api_response;
 mod pool;
+mod responses;
 use pool::Db;
-
-#[derive(Serialize, JsonSchema)]
-#[serde(crate = "rocket::serde")]
-struct Response {
-    check: String,
-}
 
 #[openapi]
 #[get("/")]
-fn index() -> Json<Response> {
-    Json(Response {
+fn index() -> Json<responses::HealthCheck> {
+    Json(responses::HealthCheck {
         check: "ok".to_string(),
     })
 }
 
-#[derive(Serialize, JsonSchema)]
-#[serde(crate = "rocket::serde")]
-struct ProductResponse {
-    data: product::Model,
-}
 /// # 바코드로 제품정보 알기
 ///
 /// 바코드를 보내주면 제품정보 리턴
 #[openapi(tag = "Barcode")]
 #[get("/barcode/<barcode>")]
-async fn get_barcode(conn: Connection<'_, Db>, barcode: String) -> Option<Json<ProductResponse>> {
+async fn get_barcode(
+    conn: Connection<'_, Db>,
+    barcode: String,
+) -> Option<Json<responses::ProductResponse>> {
     let db: &sea_orm::DatabaseConnection = conn.into_inner();
 
     let product_result = Product::find()
@@ -67,23 +60,7 @@ async fn get_barcode(conn: Connection<'_, Db>, barcode: String) -> Option<Json<P
         },
     };
 
-    Some(Json(ProductResponse { data: data }))
-}
-
-#[derive(Serialize, JsonSchema)]
-#[serde(crate = "rocket::serde")]
-struct ProductListResponse {
-    data: Vec<FridgeProductResponse>,
-}
-
-#[derive(Serialize, JsonSchema)]
-#[serde(crate = "rocket::serde")]
-struct FridgeProductResponse {
-    id: i64,
-    name: String,
-    category: Option<String>,
-    expiry: Option<String>,
-    purchase_date: Option<String>,
+    Some(Json(responses::ProductResponse { data: data }))
 }
 
 /// # 냉장고에 있는 제품 리스트
@@ -91,7 +68,10 @@ struct FridgeProductResponse {
 /// 냉장고에 있는 제품 리스트
 #[openapi(tag = "Fridge")]
 #[get("/fridges/<id>/products")]
-async fn get_product_list(conn: Connection<'_, Db>, id: i64) -> Option<Json<ProductListResponse>> {
+async fn get_product_list(
+    conn: Connection<'_, Db>,
+    id: i64,
+) -> Option<Json<responses::ProductList>> {
     let db: &sea_orm::DatabaseConnection = conn.into_inner();
 
     let fridge_record = Fridge::find_by_id(id).one(db).await.unwrap().unwrap();
@@ -106,7 +86,7 @@ async fn get_product_list(conn: Connection<'_, Db>, id: i64) -> Option<Json<Prod
         .iter()
         .map(|(product_join, product)| {
             let product_record = product.as_ref().unwrap();
-            FridgeProductResponse {
+            responses::FridgeProduct {
                 id: product_join.id,
                 name: product_record.name.clone(),
                 category: product_record.category.clone(),
@@ -116,7 +96,7 @@ async fn get_product_list(conn: Connection<'_, Db>, id: i64) -> Option<Json<Prod
         })
         .collect();
 
-    Some(Json(ProductListResponse { data: products }))
+    Some(Json(responses::ProductList { data: products }))
 }
 
 /// # 냉장고에 제품 넣기
@@ -172,33 +152,20 @@ async fn delete_product(
     Ok(Status::Created)
 }
 
-#[derive(Serialize, JsonSchema)]
-#[serde(crate = "rocket::serde")]
-struct FridgeListResponse {
-    data: Vec<FridgeDataResponse>,
-}
-
-#[derive(Serialize, JsonSchema)]
-#[serde(crate = "rocket::serde")]
-struct FridgeDataResponse {
-    id: i64,
-    name: String,
-}
-
 /// # 냉장고 리스트
 #[openapi(tag = "Fridge")]
 #[get("/fridges")]
-async fn list_fridges(conn: Connection<'_, Db>) -> Option<Json<FridgeListResponse>> {
+async fn list_fridges(conn: Connection<'_, Db>) -> Option<Json<responses::FridgeList>> {
     let db: &sea_orm::DatabaseConnection = conn.into_inner();
 
     let fridge_record = Fridge::find().all(db).await.unwrap();
 
-    Some(Json(FridgeListResponse {
+    Some(Json(responses::FridgeList {
         data: fridge_record
             .iter()
-            .map(|record| FridgeDataResponse {
+            .map(|record| responses::FridgeData {
                 id: record.id,
-                name: record.clone().name
+                name: record.clone().name,
             })
             .collect(),
     }))

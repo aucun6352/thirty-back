@@ -11,5 +11,8 @@
     "PRMS",
     "schemars",
     "securestore"
+  ],
+  "rust-analyzer.linkedProjects": [
+    "./Cargo.toml"
   ]
 }
