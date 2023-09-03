@@ -70,11 +70,60 @@ async fn get_barcode(conn: Connection<'_, Db>, barcode: String) -> Option<Json<P
     Some(Json(ProductResponse { data: data }))
 }
 
+#[derive(Serialize, JsonSchema)]
+#[serde(crate = "rocket::serde")]
+struct ProductListResponse {
+    data: Vec<FridgeProductResponse>,
+}
+
+#[derive(Serialize, JsonSchema)]
+#[serde(crate = "rocket::serde")]
+struct FridgeProductResponse {
+    id: i64,
+    name: String,
+    category: Option<String>,
+    expiry: Option<String>,
+    purchase_date: Option<String>,
+}
+
+/// # 냉장고에 있는 제품 리스트
+///
+/// 냉장고에 있는 제품 리스트
+#[openapi(tag = "Fridge")]
+#[get("/fridges/<id>/products")]
+async fn get_product_list(conn: Connection<'_, Db>, id: i64) -> Option<Json<ProductListResponse>> {
+    let db: &sea_orm::DatabaseConnection = conn.into_inner();
+
+    let fridge_record = Fridge::find_by_id(id).one(db).await.unwrap().unwrap();
+    let product_relation = fridge_record
+        .find_related(FridgeProductJoin)
+        .find_also_related(Product)
+        .all(db)
+        .await
+        .unwrap();
+
+    let products = product_relation
+        .iter()
+        .map(|(product_join, product)| {
+            let product_record = product.as_ref().unwrap();
+            FridgeProductResponse {
+                id: product_join.id,
+                name: product_record.name.clone(),
+                category: product_record.category.clone(),
+                expiry: Some(product_join.expiry.unwrap_or_default().to_string()),
+                purchase_date: Some(product_join.purchase_date.unwrap_or_default().to_string()),
+            }
+        })
+        .collect();
+
+    Some(Json(ProductListResponse { data: products }))
+}
+
 /// # 냉장고에 제품 넣기
 ///
 /// 냉장고에 제품 넣기
 #[openapi(tag = "Fridge")]
-#[post("/fridges/<id>/product/<product_id>")]
+#[post("/fridges/<id>/products/<product_id>")]
 async fn input_product(
     conn: Connection<'_, Db>,
     id: i64,
@@ -98,7 +147,7 @@ async fn input_product(
 
 /// # 냉장고에서 제품 삭제하기
 #[openapi(tag = "Fridge")]
-#[delete("/fridges/<id>/product/<fridge_product_join_id>")]
+#[delete("/fridges/<id>/products/<fridge_product_join_id>")]
 async fn delete_product(
     conn: Connection<'_, Db>,
     id: i64,
@@ -125,8 +174,8 @@ async fn delete_product(
 
 #[derive(Serialize, JsonSchema)]
 #[serde(crate = "rocket::serde")]
-struct FridgeResponse {
-    data: FridgeDataResponse,
+struct FridgeListResponse {
+    data: Vec<FridgeDataResponse>,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -134,53 +183,24 @@ struct FridgeResponse {
 struct FridgeDataResponse {
     id: i64,
     name: String,
-    products: Vec<FridgeProductResponse>,
 }
 
-#[derive(Serialize, JsonSchema)]
-#[serde(crate = "rocket::serde")]
-struct FridgeProductResponse {
-    id: i64,
-    name: String,
-    category: Option<String>,
-    expiry: Option<String>,
-    purchase_date: Option<String>,
-}
-
-/// # 냉장고보기
+/// # 냉장고 리스트
 #[openapi(tag = "Fridge")]
-#[get("/fridges/<id>")]
-async fn get_fridges(conn: Connection<'_, Db>, id: i64) -> Option<Json<FridgeResponse>> {
+#[get("/fridges")]
+async fn list_fridges(conn: Connection<'_, Db>) -> Option<Json<FridgeListResponse>> {
     let db: &sea_orm::DatabaseConnection = conn.into_inner();
 
-    let fridge_recode = Fridge::find_by_id(id).one(db).await.unwrap().unwrap();
-    let product_relation = fridge_recode
-        .find_related(FridgeProductJoin)
-        .find_also_related(Product)
-        .all(db)
-        .await
-        .unwrap();
+    let fridge_record = Fridge::find().all(db).await.unwrap();
 
-
-    let products = product_relation.iter().map(|(product_join, product)|
-        {
-            let product_record = product.as_ref().unwrap();
-            FridgeProductResponse {
-                    id: product_join.id,
-                    name: product_record.name.clone(),
-                    category: product_record.category.clone(),
-                    expiry: Some(product_join.expiry.unwrap_or_default().to_string()),
-                    purchase_date: Some(product_join.purchase_date.unwrap_or_default().to_string())
-                }
-            }
-    ).collect();
-
-    Some(Json(FridgeResponse {
-        data: FridgeDataResponse {
-            id: fridge_recode.id,
-            name: fridge_recode.name,
-            products: products
-        }
+    Some(Json(FridgeListResponse {
+        data: fridge_record
+            .iter()
+            .map(|record| FridgeDataResponse {
+                id: record.id,
+                name: record.clone().name
+            })
+            .collect(),
     }))
 }
 
@@ -235,7 +255,14 @@ fn rocket() -> _ {
         .attach(AdHoc::try_on_ignite("Migrations", run_migrations))
         .mount(
             "/",
-            openapi_get_routes![index, get_barcode, input_product, delete_product, get_fridges],
+            openapi_get_routes![
+                index,
+                get_barcode,
+                input_product,
+                delete_product,
+                list_fridges,
+                get_product_list
+            ],
         )
         .mount(
             "/swagger-ui/",

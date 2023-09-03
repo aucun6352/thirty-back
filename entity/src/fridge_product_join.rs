@@ -4,7 +4,7 @@ use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Deserialize, Serialize, JsonSchema)]
 #[serde(crate = "rocket::serde")]
-#[sea_orm(table_name = "fridge_product_joins")]
+#[sea_orm(table_name = "fridge_product_join")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
