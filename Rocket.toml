@@ -4,7 +4,7 @@ address = "localhost"
 [default.databases.sea_orm]
 # Mysql
 # make sure to enable "sqlx-mysql" feature in Cargo.toml, i.e default = ["sqlx-mysql"]
-url = "mysql://root:@localhost:3307/thirty"
+url = "mysql://root:thirty1234@db:3306/thirty"
 
 # Postgres
 # make sure to enable "sqlx-postgres" feature in Cargo.toml, i.e default = ["sqlx-postgres"]

@@ -1,0 +1,34 @@
+version: "3.8"
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: thirty
+    command: cargo run
+    # command: sleep 86400
+    volumes:
+      - .:/var/www/app
+      - build-cache:/build
+    environment:
+      CARGO_TARGET_DIR: /build
+      RUST_BACKTRACE: 1
+    tty: true
+    stdin_open: true
+    depends_on:
+      - db
+
+  db:
+    image: mysql:8
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: thirty1234
+      MYSQL_DATABASE: thirty
+
+volumes:
+  mysql-data: null
+  build-cache: null
