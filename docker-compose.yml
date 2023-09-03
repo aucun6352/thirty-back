@@ -10,9 +10,12 @@ services:
     volumes:
       - .:/var/www/app
       - build-cache:/build
+    ports:
+      - 8000:8000
     environment:
       CARGO_TARGET_DIR: /build
       RUST_BACKTRACE: 1
+      ROCKET_PROFILE: development
     tty: true
     stdin_open: true
     depends_on:
